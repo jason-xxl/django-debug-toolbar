@@ -13,7 +13,7 @@ from django.utils.importlib import import_module
 import debug_toolbar.urls
 from debug_toolbar.toolbar.loader import DebugToolbar
 
-_HTML_TYPES = ('text/html', 'application/xhtml+xml')
+_HTML_TYPES = ('text/html', 'application/xhtml+xml', 'application/json')
 
 
 def replace_insensitive(string, target, replacement):
@@ -21,6 +21,12 @@ def replace_insensitive(string, target, replacement):
     Similar to string.replace() but is case insensitive
     Code borrowed from: http://forums.devshed.com/python-programming-11/case-insensitive-string-replace-490921.html
     """
+    #print 'replace_insensitive',string, target, replacement
+    
+    if not target:
+        #print 'replace_insensitive',string, target, replacement
+        return '<html><body><code>' + string + '</code><br/><br/>' + replacement + '</html>'
+
     no_case = string.lower()
     index = no_case.rfind(target.lower())
     if index >= 0:
@@ -47,7 +53,7 @@ class DebugToolbarMiddleware(object):
         self.show_toolbar = self._show_toolbar  # default
 
         # The tag to attach the toolbar to
-        self.tag = u'</body>'
+        self.tag = u'' #u'</body>'
 
         if hasattr(settings, 'DEBUG_TOOLBAR_CONFIG'):
             show_toolbar_callback = settings.DEBUG_TOOLBAR_CONFIG.get(
@@ -58,6 +64,7 @@ class DebugToolbarMiddleware(object):
             tag = settings.DEBUG_TOOLBAR_CONFIG.get('TAG', None)
             if tag:
                 self.tag = u'</' + tag + u'>'
+
 
     def _show_toolbar(self, request):
         if getattr(settings, 'TEST', False):
@@ -116,8 +123,13 @@ class DebugToolbarMiddleware(object):
         __traceback_hide__ = True
         ident = thread.get_ident()
         toolbar = self.__class__.debug_toolbars.get(ident)
+        
         if not toolbar or request.is_ajax():
             return response
+        
+        if response.get('Content-Type', '').split(';')[0] == 'application/json' and not request.GET.get('d',''):
+            return response
+
         if isinstance(response, HttpResponseRedirect):
             if not toolbar.config['INTERCEPT_REDIRECTS']:
                 return response
@@ -133,10 +145,17 @@ class DebugToolbarMiddleware(object):
                 response.get('Content-Type', '').split(';')[0] in _HTML_TYPES):
             for panel in toolbar.panels:
                 panel.process_response(request, response)
+            
             response.content = replace_insensitive(
                 smart_unicode(response.content),
                 self.tag,
                 smart_unicode(toolbar.render_toolbar() + self.tag))
+
+            content_type = response.get('Content-Type', '')
+            
+            if content_type.split(';')[0] == 'application/json':
+                response['Content-Type'] = 'text/html;' + content_type.split(';')[1]
+
             if response.get('Content-Length', None):
                 response['Content-Length'] = len(response.content)
         del self.__class__.debug_toolbars[ident]
