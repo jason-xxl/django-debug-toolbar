@@ -127,7 +127,7 @@ class DebugToolbarMiddleware(object):
         if not toolbar or request.is_ajax():
             return response
         
-        if response.get('Content-Type', '').split(';')[0] == 'application/json' and not request.GET.get('d',''):
+        if not (request.GET.get('d','') or request.POST.get('d','')): #response.get('Content-Type', '').split(';')[0] == 'application/json' and 
             return response
 
         if isinstance(response, HttpResponseRedirect):
